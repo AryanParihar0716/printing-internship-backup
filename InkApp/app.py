@@ -6,12 +6,14 @@ import datetime
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, 'consolidated_ink_key_model.pkl')
+# Note: Ensure this matches the .pkl name in your training script
+MODEL_PATH = os.path.join(BASE_DIR, 'decision_tree_model.pkl')
 LOG_PATH = os.path.join(BASE_DIR, 'print_logs.xlsx')
 
-# Dynamic Calibration Configuration
-config = {"density_relation": 0.027, "zero_setting": 0.0, "target_de": 2.5}
+# Calibration Config
+config = {"zero_setting": 0.0, "target_de": 2.5}
 
+# Load the Decision Tree
 model = joblib.load(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
 
 @app.route('/')
@@ -21,7 +23,6 @@ def index():
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
     if request.method == 'POST':
-        config["density_relation"] = float(request.form.get("density_relation", 0.027))
         config["zero_setting"] = float(request.form.get("zero_setting", 0.0))
         config["target_de"] = float(request.form.get("target_de", 2.5))
         return redirect('/')
@@ -34,18 +35,20 @@ def predict_all():
         req = request.json
         results = []
         for z in req['zones']:
-            # Feature Map: This MUST match the train_model.py exactly
+            # MATCHING YOUR 6-FEATURE INPUT:
+            # [Color, Paper type, Ink key zero setting, Delta E improvement, initial density, initial ink key setting]
             feat = pd.DataFrame([{
                 'Color': {'Cyan':0,'Magenta':1,'Yellow':2,'Black':3}.get(z['color'],0),
                 'Paper type': {'Coated':0,'Uncoated':1}.get(z['paper_type'],0),
-                'Zone number': int(z['zone_no']),
                 'Ink key zero setting': config["zero_setting"],
                 'Delta E improvement': float(z['de_before']) - config["target_de"],
-                'initial density': float(z['init_dens']), # NOW DYNAMIC FROM FRONTEND
+                'initial density': float(z['init_dens']),
                 'initial ink key setting': float(z['init_key'])
             }])
             
-            pred = round(float(model.predict(feat)[0]), 2)
+            # Reorder columns to match training exactly
+            cols = ['Color', 'Paper type', 'Ink key zero setting', 'Delta E improvement', 'initial density', 'initial ink key setting']
+            pred = round(float(model.predict(feat[cols])[0]), 2)
             results.append({"zone_no": z['zone_no'], "predicted_key": pred})
             
         return jsonify({"status": "success", "results": results})
@@ -60,12 +63,13 @@ def save_actuals():
         new_entries = []
         for e in logs:
             new_entries.append({
-                'Color': e['color'], 'Paper type': e['paper_type'], 'Zone number': int(e['zone_no']),
-                'Ink key zero setting': config["zero_setting"], 'Delta E before': float(e['de_before']),
-                'Delta E after (Target)': config["target_de"], 
-                'initial density': float(e['init_dens']), # LOGGING DENSITY FOR RETRAINING
+                'Color': e['color'], 'Paper type': e['paper_type'], 
+                'Ink key zero setting': config["zero_setting"], 
+                'Delta E before': float(e['de_before']),
+                'Delta E after': config["target_de"], 
+                'initial density': float(e['init_dens']),
                 'initial ink key setting': float(e['init_key']), 
-                'final ink key setting (ACTUAL)': float(e['actual_key']),
+                'final ink key setting': float(e['actual_key']),
                 'Timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             })
         df_new = pd.DataFrame(new_entries)
