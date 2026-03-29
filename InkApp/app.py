@@ -7,7 +7,6 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'consolidated_ink_key_model.pkl')
 
-# Global model loading
 model = joblib.load(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
 
 @app.route('/')
@@ -21,7 +20,6 @@ def predict_all():
         req = request.json
         results = []
         for z in req['zones']:
-            # Create feature row
             feat = pd.DataFrame([{
                 'Color': {'Cyan':0,'Magenta':1,'Yellow':2,'Black':3}.get(z['color'],0),
                 'Paper type': {'Coated':0,'Uncoated':1}.get(z['paper_type'],0),
@@ -31,23 +29,13 @@ def predict_all():
                 'initial density': 1.31,
                 'initial ink key setting': float(z['init_key'])
             }])
-            
-            # Predict Key %
+            # ONLY PREDICTING THE KEY %
             pred = round(float(model.predict(feat)[0]), 2)
+            results.append({"zone_no": z['zone_no'], "predicted_key": pred})
             
-            # Physics Bridge for Density
-            # Formula: (Final Key - Init Key) * 0.3 / 11
-            dens_delta = (pred - float(z['init_key'])) * 0.3 / 11
-            pred_dens = round(1.31 + dens_delta, 3)
-
-            results.append({
-                "zone_no": z['zone_no'], 
-                "predicted_key": pred, 
-                "predicted_density": pred_dens
-            })
         return jsonify({"status": "success", "results": results})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5000)
+    app.run(debug=False)

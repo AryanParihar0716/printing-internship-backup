@@ -2180,7 +2180,7 @@
     </script>
 </body>
 </html>-->
-<!DOCTYPE html>
+<!--<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -2365,6 +2365,93 @@
             } catch (e) { 
                 statusMsg.innerText = "CONNECTION FAILED";
             }
+        }
+    </script>
+</body>
+</html>-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InkKey Pro | Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #020617; color: white; font-family: sans-serif; }
+        .grid-32 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 10px; }
+        @media (min-width: 768px) { .grid-32 { grid-template-columns: repeat(4, 1fr); } }
+        @media (min-width: 1280px) { .grid-32 { grid-template-columns: repeat(8, 1fr); } }
+        input, select { background: #1e293b; border: 1px solid #334155; color: #22d3ee; text-align: center; border-radius: 4px; outline: none; }
+        input:focus { border-color: #0ea5e9; }
+    </style>
+</head>
+<body class="p-4">
+    <header class="flex flex-col lg:flex-row justify-between bg-slate-900 p-4 rounded-xl border border-slate-800 mb-6 gap-4 shadow-2xl">
+        <div>
+            <h1 class="text-xl font-bold italic tracking-tighter">INKKEY <span class="text-cyan-500">PRO</span></h1>
+            <p class="text-[10px] text-slate-500 font-mono">STATION OPTIMIZER V5.0</p>
+        </div>
+        <div class="flex flex-wrap gap-2 text-[10px] uppercase font-bold text-slate-400">
+            <div class="flex flex-col">Target ΔE <input id="target_de" type="number" value="2.5" class="w-16 h-8"></div>
+            <div class="flex flex-col">Zero mm <input id="zero_setting" type="number" value="0.0" class="w-16 h-8"></div>
+            <div class="flex flex-col">Paper <select id="paper" class="h-8 px-2"><option>Coated</option><option>Uncoated</option></select></div>
+            <div class="flex flex-col">Color <select id="color" class="h-8 px-2 text-cyan-400"><option>Cyan</option><option>Magenta</option><option>Yellow</option><option>Black</option></select></div>
+        </div>
+        <button onclick="predict()" class="bg-cyan-600 hover:bg-cyan-500 px-8 py-2 rounded-lg font-black uppercase text-xs transition-all active:scale-95 shadow-lg shadow-cyan-900/20">Predict</button>
+    </header>
+
+    <main class="grid-32">
+        <script>
+            for(let i=1; i<=32; i++) {
+                document.write(`
+                <div class="bg-slate-800/40 p-3 rounded-lg border border-slate-700 hover:border-cyan-500 transition-colors">
+                    <div class="text-[11px] font-black text-slate-500 mb-2">ZONE ${i}</div>
+                    <div class="flex flex-col gap-2">
+                        <input type="number" step="0.1" class="de-in h-8 text-sm" data-z="${i}" placeholder="ΔE Scan">
+                        <input type="number" class="key-in h-6 text-[9px] opacity-50" data-z="${i}" value="43.6">
+                    </div>
+                    <div class="mt-3 h-10 bg-black/60 rounded-md flex items-center justify-center font-black text-lg text-cyan-400 italic shadow-inner" id="txt-${i}">--</div>
+                </div>`);
+            }
+        </script>
+    </main>
+
+    <script>
+        async function predict() {
+            const zones = [];
+            const target = document.getElementById('target_de').value;
+            const zero = document.getElementById('zero_setting').value;
+            const paper = document.getElementById('paper').value;
+            const color = document.getElementById('color').value;
+
+            document.querySelectorAll('.de-in').forEach(el => {
+                if(el.value) {
+                    const z = el.dataset.z;
+                    zones.push({ 
+                        zone_no: z, 
+                        de_before: el.value, 
+                        init_key: document.querySelector(`.key-in[data-z="${z}"]`).value, 
+                        color: color, 
+                        paper_type: paper 
+                    });
+                }
+            });
+
+            if(!zones.length) return alert("Enter ΔE values!");
+
+            try {
+                const res = await fetch('/predict_all', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ zones, target_de: target, zero_setting: zero }) 
+                });
+                const data = await res.json();
+                if(data.status === "success") {
+                    data.results.forEach(r => {
+                        document.getElementById(`txt-${r.zone_no}`).innerText = r.predicted_key + "%";
+                    });
+                }
+            } catch (e) { alert("Server Offline"); }
         }
     </script>
 </body>
