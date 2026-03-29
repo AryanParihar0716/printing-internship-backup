@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings | InkKey Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0f172a] text-slate-200 min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full bg-[#1e293b] p-8 rounded-2xl border border-slate-700">
+        <h1 class="text-xl font-bold mb-6 text-cyan-400">Press Calibration</h1>
+        <form action="/settings" method="POST" class="space-y-4">
+            <div><label class="text-[10px] uppercase font-bold text-slate-400">Density Relation</label>
+                <input type="number" step="0.01" name="density_relation" value="{{config.density_relation}}" class="w-full bg-slate-900 p-2 rounded border border-slate-700"></div>
+            <div><label class="text-[10px] uppercase font-bold text-slate-400">Zero Setting Offset (mm)</label>
+                <input type="number" name="zero_setting" value="{{config.zero_setting}}" class="w-full bg-slate-900 p-2 rounded border border-slate-700"></div>
+            <div><label class="text-[10px] uppercase font-bold text-slate-400">Target ΔE</label>
+                <input type="number" step="0.1" name="target_de" value="{{config.target_de}}" class="w-full bg-slate-900 p-2 rounded border border-slate-700"></div>
+            <button type="submit" class="w-full bg-cyan-600 py-3 rounded font-bold">SAVE CONFIG</button>
+        </form>
+        <a href="/" class="block text-center mt-4 text-slate-500 text-xs italic">← Back to Console</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,7 @@
+flask
+pandas
+joblib
+scikit-learn
+openpyxl
+gunicorn
+numpy<2.0
