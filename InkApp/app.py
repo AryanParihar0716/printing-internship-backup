@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect
 import pandas as pd
 import joblib
 import os
@@ -9,30 +9,45 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'consolidated_ink_key_model.pkl')
 LOG_PATH = os.path.join(BASE_DIR, 'print_logs.xlsx')
 
+# Dynamic Calibration Configuration
+config = {"density_relation": 0.027, "zero_setting": 0.0, "target_de": 2.5}
+
 model = joblib.load(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', config=config)
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    if request.method == 'POST':
+        config["density_relation"] = float(request.form.get("density_relation", 0.027))
+        config["zero_setting"] = float(request.form.get("zero_setting", 0.0))
+        config["target_de"] = float(request.form.get("target_de", 2.5))
+        return redirect('/')
+    return render_template('settings.html', config=config)
 
 @app.route('/predict_all', methods=['POST'])
 def predict_all():
-    if not model: return jsonify({"status": "error", "message": "Model not loaded"})
+    if not model: return jsonify({"status": "error", "message": "Model missing"})
     try:
         req = request.json
         results = []
         for z in req['zones']:
+            # Feature Map: This MUST match the train_model.py exactly
             feat = pd.DataFrame([{
                 'Color': {'Cyan':0,'Magenta':1,'Yellow':2,'Black':3}.get(z['color'],0),
                 'Paper type': {'Coated':0,'Uncoated':1}.get(z['paper_type'],0),
                 'Zone number': int(z['zone_no']),
-                'Ink key zero setting': float(req['zero_setting']),
-                'Delta E improvement': float(z['de_before']) - float(req['target_de']),
-                'initial density': 1.31,
+                'Ink key zero setting': config["zero_setting"],
+                'Delta E improvement': float(z['de_before']) - config["target_de"],
+                'initial density': float(z['init_dens']), # NOW DYNAMIC FROM FRONTEND
                 'initial ink key setting': float(z['init_key'])
             }])
+            
             pred = round(float(model.predict(feat)[0]), 2)
             results.append({"zone_no": z['zone_no'], "predicted_key": pred})
+            
         return jsonify({"status": "success", "results": results})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
@@ -46,21 +61,22 @@ def save_actuals():
         for e in logs:
             new_entries.append({
                 'Color': e['color'], 'Paper type': e['paper_type'], 'Zone number': int(e['zone_no']),
-                'Ink key zero setting': float(data['zero_setting']), 'Delta E before': float(e['de_before']),
-                'Delta E after (Target)': float(data['target_de']), 'initial density': 1.31,
-                'initial ink key setting': float(e['init_key']), 'final ink key setting (ACTUAL)': float(e['actual_key']),
+                'Ink key zero setting': config["zero_setting"], 'Delta E before': float(e['de_before']),
+                'Delta E after (Target)': config["target_de"], 
+                'initial density': float(e['init_dens']), # LOGGING DENSITY FOR RETRAINING
+                'initial ink key setting': float(e['init_key']), 
+                'final ink key setting (ACTUAL)': float(e['actual_key']),
                 'Timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             })
-        
         df_new = pd.DataFrame(new_entries)
         if os.path.exists(LOG_PATH):
             df_old = pd.read_excel(LOG_PATH)
             df_new = pd.concat([df_old, df_new], ignore_index=True)
         df_new.to_excel(LOG_PATH, index=False)
-        
-        return jsonify({"status": "success", "message": "Actuals saved!"})
+        return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)

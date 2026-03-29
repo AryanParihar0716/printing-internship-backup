@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import joblib
 import os
@@ -13,21 +13,25 @@ MODEL_NAME = 'consolidated_ink_key_model.pkl'
 LOG_PATH = os.path.join(BASE_DIR, 'print_logs.xlsx')
 
 def run_full_training():
-    # 1. Load Base Datasets
-    files = ['Plus real (0.3-11%).xlsx', 'real job dataset ( pakka wala ).xlsx', 'Sample data for 5mm (34_).xlsx', 'Extended data of plus offset, 2.7mm and 3.9mm (1).xlsx', 'Extended data of plus offset(11_), 2.7mm(24_) and 3.9mm(33_) and 1.3mm(15_) and 0.6mm(7_) (1).xlsx']
+    # 1. Load All Datasets
+    files = ['Plus real (0.3-11%).xlsx', 'real job dataset ( pakka wala ).xlsx', 
+             'Sample data for 5mm (34_).xlsx', 'Extended data of plus offset, 2.7mm and 3.9mm (1).xlsx', 
+             'Extended data of plus offset(11_), 2.7mm(24_) and 3.9mm(33_) and 1.3mm(15_) and 0.6mm(7_) (1).xlsx']
+    
     all_dfs = []
-
     for f in files:
         path = os.path.join(BASE_DIR, f)
         if os.path.exists(path):
             df = pd.read_excel(path)
-            df.rename(columns={'Paper Type': 'Paper type', 'Delta E after ': 'Delta E after', 'Initial Density': 'initial density', 'Initial Ink Key Setting': 'initial ink key setting'}, inplace=True)
+            df.rename(columns={'Paper Type': 'Paper type', 'Delta E after ': 'Delta E after', 
+                               'Initial Density': 'initial density', 'Initial Ink Key Setting': 'initial ink key setting'}, inplace=True)
             all_dfs.append(df)
 
-    # 2. Load New Actuals (if any exist)
+    # Load corrections for the learning loop
     if os.path.exists(LOG_PATH):
         df_logs = pd.read_excel(LOG_PATH)
-        df_logs.rename(columns={'Delta E before': 'Delta E before', 'Delta E after (Target)': 'Delta E after', 'final ink key setting (ACTUAL)': 'final ink key setting'}, inplace=True)
+        df_logs.rename(columns={'Delta E before': 'Delta E before', 'Delta E after (Target)': 'Delta E after', 
+                               'final ink key setting (ACTUAL)': 'final ink key setting'}, inplace=True)
         all_dfs.append(df_logs)
 
     data = pd.concat(all_dfs, ignore_index=True).dropna()
@@ -36,26 +40,26 @@ def run_full_training():
     data['Ink key zero setting'] = data['Ink key zero setting'].astype(str).str.replace("mm","",regex=False).astype(float)
     data['Delta E improvement'] = data['Delta E before'] - data['Delta E after']
 
-    X = data[['Color', 'Paper type', 'Zone number', 'Ink key zero setting', 'Delta E improvement', 'initial density', 'initial ink key setting']]
-    y = data['final ink key setting']
+    features = ['Color', 'Paper type', 'Zone number', 'Ink key zero setting', 'Delta E improvement', 'initial density', 'initial ink key setting']
+    X, y = data[features], data['final ink key setting']
 
-    # 3. Slim Tournament (To prevent Render OOM)
+    # 2. The Tournament (Decision Tree Added)
     models = {
         'Linear': LinearRegression(),
-        'RandomForest': RandomForestRegressor(n_estimators=40, max_depth=7, random_state=42),
-        'GradientBoost': GradientBoostingRegressor(n_estimators=70, max_depth=4, learning_rate=0.1, random_state=42)
+        'DecisionTree': DecisionTreeRegressor(max_depth=12, random_state=42),
+        'RandomForest': RandomForestRegressor(n_estimators=60, max_depth=12, random_state=42),
+        'GradientBoost': GradientBoostingRegressor(n_estimators=80, max_depth=6, learning_rate=0.1, random_state=42)
     }
 
     best_r2, best_model = -1, None
-    for name, model in models.items():
-        model.fit(X, y)
-        score = r2_score(y, model.predict(X))
+    for name, m in models.items():
+        m.fit(X, y)
+        score = r2_score(y, m.predict(X))
         if score > best_r2:
-            best_r2, best_model = score, model
+            best_r2, best_model = score, m
 
     joblib.dump(best_model, MODEL_NAME, compress=9)
-    print(f"✅ Training Complete: {type(best_model).__name__} | R2: {best_r2:.4f}")
-    return best_model
+    print(f"✅ Tournament Winner: {type(best_model).__name__} | R2: {best_r2:.4f}")
 
 if __name__ == "__main__":
     run_full_training()
