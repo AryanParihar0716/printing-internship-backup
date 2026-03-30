@@ -8,7 +8,7 @@ import joblib
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_NAME = 'consolidated_ink_key_model.pkl'
+MODEL_NAME = 'decision_tree_model.pkl'
 LOG_PATH = os.path.join(BASE_DIR, 'print_logs.xlsx')
 
 def run_full_training():
